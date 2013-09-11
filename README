@@ -1,0 +1,15 @@
+1. First running:
+aclocal
+autoheader 
+libtoolize 
+autoconf 
+automake --add-missing
+./configure
+
+2. p1010 compile
+aclocal
+autoheader 
+libtoolize 
+autoconf 
+automake --add-missing
+./configure --host=powerpc-fsl-linux-gnuspe

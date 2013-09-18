@@ -28,3 +28,9 @@ libtoolize
 autoconf 
 automake --add-missing
 ./configure --host=powerpc-fsl-linux-gnuspe
+
+
+测试：
+测试需要用lua
+build/tests目录，运行：
+   lua testrun.lua

@@ -1,4 +1,19 @@
-1. First running:
+zcrt是一个嵌入式软件开发平台，支持：
+1：OS封装
+2：schedule
+3：timer
+4：事件
+5：工具库：list，array，hash等
+6：日志
+7：ipc，用于模块与外部数据交互
+
+zcrt目前可以运行在windows，linux用户态，linux内核态下。
+linux可以是嵌入式linux或桌面linux。
+其通过ipc模块与外部模块进行交互
+
+
+编译
+1. linux First running:
 aclocal
 autoheader 
 libtoolize 

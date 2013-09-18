@@ -128,7 +128,7 @@ function test_testapi_ipc_api_ipc_test_struct_testArrayStruct()
 	for i=1,5 do
 		p1[i]={p0=true,p1=i}
 	end
-	local r,r1=cli:Call(0,node,'ipc_test_struct_testStuctIsArray',{p0=true,p1=p1})
+	local r,r1=cli:Call(0,node,'ipc_test_struct_testStuctIsArray',{p0=true,pa1=p1})
 	assert(r,r1)
 	assert(r1)
 	assert(r1.p0)

@@ -1,4 +1,4 @@
-module(..., package.seeall)
+local _M=_M or {}
 
 local cli
 
@@ -15,12 +15,12 @@ function Destroy()
 	cli:close()
 end
 
-function test_testapi_ipc_test_call()
+function _M.test_testapi_ipc_test_call()
 	local r,msg=cli:Call(0,node,'ipc_test_call',0x12,0xff)
 	assert(r,msg)
 	assert(msg==94,msg)
 end
-function test_testapi_ipc_api_ipc_test_basetype()
+function _M.test_testapi_ipc_api_ipc_test_basetype()
 	local r,r1,r2,r3,r4,r5=cli:Call(0,node,'ipc_test_basetype',false,0x12,0xf1ff,-131234)
 	assert(r,r1)
 	assert(r1==50,''..r1)
@@ -29,7 +29,7 @@ function test_testapi_ipc_api_ipc_test_basetype()
 	assert(r4==-233631179,''..r4)
 	assert(r5==true)
 end
-function test_testapi_ipc_api_ipc_test_unsignedtype()
+function _M.test_testapi_ipc_api_ipc_test_unsignedtype()
 	local r,r1,r2,r3,r4=cli:Call(0,node,'ipc_test_unsignedtype',0x12,0xf1ff,0xf2131234)
 	assert(r,r1)
 	assert(r1==0x12,''..r1)
@@ -42,7 +42,7 @@ local function cmpnumber(v1,v2)
 	return v1>=v2-0.0005 and v1<=v2+0.0005
 end
 
-function test_testapi_ipc_api_ipc_test_number()
+function _M.test_testapi_ipc_api_ipc_test_number()
 	local r,r1,r2,r3,r4=cli:Call(0,node,'ipc_test_number',12345,1234567898765,1234567890123)
 	assert(r,r1)
 	assert(cmpnumber(r1,12345),''..r1)
@@ -51,19 +51,19 @@ function test_testapi_ipc_api_ipc_test_number()
 	assert(cmpnumber(r4,9876543210123),''..r4)
 end
 
-function test_testapi_ipc_api_ipc_test_string()
+function _M.test_testapi_ipc_api_ipc_test_string()
 	local r,r1=cli:Call(0,node,'ipc_test_string',"test string")
 	assert(r,r1)
 	assert(r1=='params string', ''..r1)
 end
 
-function test_testapi_ipc_api_ipc_test_stringnull()
+function _M.test_testapi_ipc_api_ipc_test_stringnull()
 	local r,r1,r2=cli:Call(0,node,'ipc_test_stringnull',"")
 	assert(r,r1)
 	assert(not r1,''..(r1 or ''))
 end
 
-function test_testapi_ipc_api_ipc_test_array_int()
+function _M.test_testapi_ipc_api_ipc_test_array_int()
 	local r,r1,r2=cli:Call(0,node,'ipc_test_array_int',{1,2,3,4,5},{1000001,1000002,1000003,1000004,1000005})
 	assert(r,r1)
 	assert(#r1, 10)
@@ -71,7 +71,7 @@ function test_testapi_ipc_api_ipc_test_array_int()
 		assert(r1[i]==i,''..r1[i])
 	end
 end
-function test_testapi_ipc_api_ipc_test_array_mix()
+function _M.test_testapi_ipc_api_ipc_test_array_mix()
 	local r,r1,r2,r3=cli:Call(0,node,'ipc_test_array_mix',{true,false,true,false},{1000001,1000002,1000003,1000004,1000005}, {12345, 12346, 12347})
 	assert(r,r1)
 	assert(#r1==3)
@@ -89,7 +89,7 @@ function test_testapi_ipc_api_ipc_test_array_mix()
 		assert(cmpnumber(r3[i],-567+i-1), ''..r3[i])
 	end
 end
-function test_testapi_ipc_api_ipc_test_struct_testStuct1()
+function _M.test_testapi_ipc_api_ipc_test_struct_testStuct1()
 	local r,r1=cli:Call(0,node,'ipc_test_struct_testStuct1',{p0=false,p1=30,p2=0x12345678,p3=-12,p4=-123456,p5='test'})
 	assert(r,r1)
 	assert(r1.p0)
@@ -99,7 +99,7 @@ function test_testapi_ipc_api_ipc_test_struct_testStuct1()
 	assert(r1.p4==-87654321,r1.p4)
 	assert(r1.p5=='qwerty',r1.p5)
 end
-function test_testapi_ipc_api_ipc_test_struct_testStuctAndStruct()
+function _M.test_testapi_ipc_api_ipc_test_struct_testStuctAndStruct()
 	local r,r1=cli:Call(0,node,'ipc_test_struct_testStuctAndStruct',{p0=false,p1={p0=true,p1=12}})
 	assert(r,r1)
 	assert(r1.p0)
@@ -108,7 +108,7 @@ function test_testapi_ipc_api_ipc_test_struct_testStuctAndStruct()
 	assert(r1.p1.p1==200)
 end
 
-function test_testapi_ipc_api_ipc_test_struct_testStuctArray()
+function _M.test_testapi_ipc_api_ipc_test_struct_testStuctArray()
 	local p1={}
 	for i=1,5 do
 		p1[i]={p0=true,p1=i}
@@ -123,7 +123,7 @@ function test_testapi_ipc_api_ipc_test_struct_testStuctArray()
 	end
 end
 
-function test_testapi_ipc_api_ipc_test_struct_testArrayStruct()
+function _M.test_testapi_ipc_api_ipc_test_struct_testArrayStruct()
 	local p1={}
 	for i=1,5 do
 		p1[i]={p0=true,p1=i}
@@ -140,23 +140,23 @@ function test_testapi_ipc_api_ipc_test_struct_testArrayStruct()
 	end
 end
 
-function test_testapi_ipc_api_ipc_ipc_test_args()
+function _M.test_testapi_ipc_api_ipc_ipc_test_args()
 	local r,r1=cli:Call(0,node,'ipc_test_args',100)
 	assert(r,r1)
 	assert(r1==10)
 end
 
-function test_testapi_ipc_api_ipc_ipc_test_strcut_default()
+function _M.test_testapi_ipc_api_ipc_ipc_test_strcut_default()
 	local r,r1=cli:Call(0,node,'ipc_test_strcut_default',{p1=100,p5=1000})
 	assert(r,r1)
 end
 
-function test_testapi_ipc_not_enough_params()
+function _M.test_testapi_ipc_not_enough_params()
 	local r,r1,r2,r3=cli:Call(0,node,'ipc_test_array_mix',{true,false,true,false},{1000001,1000002,1000003,1000004,1000005})
 	assert(not r,r1)
 end
 
-function test_testapi_ipc_api_ipc_ipc_test_strcut_enum()
+function _M.test_testapi_ipc_api_ipc_ipc_test_strcut_enum()
 	local r,r1,r2=cli:Call(0,node,'ipc_test_strcut_enum',2,{p1=1})
 	assert(r,r1)
 	assert(r1==1,r1)
@@ -171,7 +171,7 @@ local function _event_cb(evtid, evt)
 	sn=sn+1
 end
 
-function test_testapi_ipc_api_ipc_ipc_test_event()
+function _M.test_testapi_ipc_api_ipc_ipc_test_event()
 	cli:reg_event(2,_event_cb)
 	cli._react={EV_TIMEOUT=1}
 	local r,r1=cli:Call(0,node,'ipc_test_event')
@@ -182,3 +182,4 @@ function test_testapi_ipc_api_ipc_ipc_test_event()
 	cli:step()
 	assert(sn==3)
 end
+return _M

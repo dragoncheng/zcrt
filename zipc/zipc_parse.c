@@ -248,7 +248,7 @@ EZCRTErr zipc_parse_app_link(ZModule_t module, ZBuf_t ibuf, ZBuf_t obuf, ZCRT_EV
 			}
 			ret = _zipc_link_parase_eventid(ibuf, &evtid);
 			if(ret !=0 || evtid==0) break;
-			zcrt_event_register(module, 10, evtid, cb, p1, p2);
+			zcrt_event_register_ex(module, 10, evtid, EZCRTEvtType_local,cb, p1, p2);
 		}
 		else if (zstr_buf_cmp(&action,"_unhookevt") == 0)
 		{

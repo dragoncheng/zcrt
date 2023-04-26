@@ -43,6 +43,8 @@ typedef struct tagZIPC
 {
 	ZHANDLE_t thr;
 	ZHANDLE_t sch;
+	ZHANDLE_t respondSch;	
+	ZHANDLE_t evtSch;
 	ZHANDLE_t socket;
 	ZModule_t module;
 	ZHANDLE_t mutex;

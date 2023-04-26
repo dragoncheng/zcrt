@@ -38,6 +38,7 @@ THE SOFTWARE.
 #include<sys/socket.h>
 #include<netinet/in.h>
 #include <errno.h>
+#include <unistd.h>
 
 #define SOCKET int
 #define SOCKET_ERROR -1
@@ -96,10 +97,21 @@ static bool_t _zipc_client_recv_payload(SOCKET clientSocket, uint32_t payloadSiz
 	return true;
 }
 
+static void _zipc_buf_send_job(void* p1, void*p2)
+{
+	_lpzstZIPCClient client = (_lpzstZIPCClient)p1;
+	ZBuf_t buf   = (ZBuf_t)p2;
+	if (client && buf)
+	{
+		send(client->sock, buf->buf, buf->len, 0);
+		zipc_buf_free(client->ipc, buf);
+	}
+}
 /**/
 static void _zipc_hookevent_cb(uint32_t evtid, void* evtdata, _lpzstZIPCClient client, void* p2)
 {
 	ZBuf_t buf = NULL;
+	static bool_t notprint=true;
 	ARG_UNUSED(p2);
 	buf = zipc_buf_malloc(client->ipc);
 	if (buf==NULL)
@@ -108,9 +120,29 @@ static void _zipc_hookevent_cb(uint32_t evtid, void* evtdata, _lpzstZIPCClient c
 	}
 	if (zipc_encode_event(client->ipc->module, evtid, evtdata, buf)==0)
 	{
-		send(client->sock, buf->buf, buf->len, 0);
+		if (zcrt_schedule_sendjob(client->ipc->evtSch, (ZCRT_CB)_zipc_buf_send_job, client, buf) != 0)
+		{
+			zipc_buf_free(client->ipc, buf);
+			if (notprint)
+			{
+				ZLOG_ERROR("zipc evtSch schedule was full:evtid=%d\n",evtid);
+				notprint = false;
+			}
+		}
+		else
+		{
+			if ( notprint==false )
+			{
+				ZLOG_ERROR("zipc evtSch schedule was full finished:evtid=%d\n",evtid);
+				notprint = true;
+			}
+		}
+
 	}
-	zipc_buf_free(client->ipc, buf);
+	else
+	{
+		zipc_buf_free(client->ipc, buf);
+	}
 }
 
 static void _zipc_msg_proc_job(void* p1, void* p2, void* p3)
@@ -119,7 +151,7 @@ static void _zipc_msg_proc_job(void* p1, void* p2, void* p3)
 	ZBuf_t ibuf = (ZBuf_t)p2;
 	uint16_t appType=(uint16_t)((uint32_t)p3);
 
-	SOCKET clientSocket=client->sock;
+	//SOCKET clientSocket=client->sock;
 	ZBuf_t obuf = zipc_buf_malloc(client->ipc);
 	ZIPCMsgHdr_t rhdr=NULL;
 
@@ -143,10 +175,18 @@ static void _zipc_msg_proc_job(void* p1, void* p2, void* p3)
 	{
 		rhdr = (ZIPCMsgHdr_t)obuf->buf;
 		rhdr->payloadSize = htonl(obuf->len-ZIPC_HEAD_LEN);
-		send(clientSocket, obuf->buf, obuf->len, 0);
+		/* send(clientSocket, obuf->buf, obuf->len, 0); */
+		if (zcrt_schedule_sendjob(client->ipc->respondSch, (ZCRT_CB)_zipc_buf_send_job, client, obuf) != 0)
+		{
+			zipc_buf_free(client->ipc, obuf);
+			ZLOG_ERROR("zipc respondSch schedule was full");
+		}
+	}
+	else
+	{
+		zipc_buf_free(client->ipc, obuf);
 	}
 	zipc_buf_free(client->ipc, ibuf);
-	zipc_buf_free(client->ipc, obuf);
 	zcrt_atom_dec(&(client->jobcnt));
 }
 
@@ -175,7 +215,12 @@ static int _zipc_client_thread(void* arg)
 		appType = hdr.appType;
 		
 		zcrt_atom_inc(&(client->jobcnt));
-		zcrt_schedule_sendjob_argn(ipc->sch, (ZCRT_CB)_zipc_msg_proc_job, 3, client, buf, (void*)appType);
+		if (zcrt_schedule_sendjob_argn(ipc->sch, (ZCRT_CB)_zipc_msg_proc_job, 3, client, buf, (void*)appType) !=0 )
+		{
+			zcrt_atom_dec(&(client->jobcnt));
+			zipc_buf_free(ipc,buf);
+			ZLOG_ERROR("zipc sch schedule was full");
+		}
 		buf = zipc_buf_malloc(ipc);
 		if (buf ==NULL)
 		{
@@ -219,7 +264,7 @@ static int _zipc_server_thread(void* arg)
 		return -1;
 	}
 	if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (void*)&sock_opt, sizeof(sock_opt) ) == -1){
-		return false;
+		return -1;
 	}
 
 	ipc->socket = (ZHANDLE_t)sock;
@@ -268,11 +313,13 @@ ZHANDLE_t zipc_server_create(ZModule_t module, uint16_t port, const char* name)
 
 	ipc->module = module;
 	ipc->port = port;
+	ipc->run = true;
 	ipc->mutex = zcrt_mutex_create("ZIPC");
 	ipc->modlist = zcrt_hash_new(128,zipc_component_hash_key, zipc_component_hash_cmp);
+	ipc->sch = zcrt_schedule_create(module, "zipc", EZCRTSchType_zcrtThread, EZCRTSchPri_priNormal, 100);
+	ipc->respondSch = zcrt_schedule_create(module, "zipc", EZCRTSchType_selfThread, EZCRTSchPri_priNormal, 500);
+	ipc->evtSch = zcrt_schedule_create_share(module, ipc->respondSch, "zipc", EZCRTSchPri_priLow, 500);
 	ipc->thr = zcrt_thread_create("ZIPCSVR", 0, ZCRT_THREAD_PRI_NOMAL, _zipc_server_thread, ipc);
-	ipc->sch = zcrt_schedule_create(module, "zipc", EZCRTSchType_zcrtThread, EZCRTSchPri_priNormal, 20);
-	ipc->run = true;
 	return (ZHANDLE_t)ipc;
 }
 
@@ -298,6 +345,8 @@ void zipc_server_delete( ZHANDLE_t h )
 
 	_zipc_comp_buf_freeall(ipc);
 	zcrt_hash_delete(ipc->modlist);
+	zcrt_schedule_delete(ipc->evtSch);
+	zcrt_schedule_delete(ipc->respondSch);
 	zcrt_schedule_delete(ipc->sch);
 	zcrt_mutex_delete(ipc->mutex);
 	zcrt_free(ipc);

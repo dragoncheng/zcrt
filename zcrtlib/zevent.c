@@ -30,6 +30,7 @@ typedef struct tagZEventCB
 {
 	ZCRT_EVT_CB fn;
 	uint8_t pri;
+	uint8_t evtType;
 	void* p1;
 	void* p2;
 	struct tagZEventCB* next;
@@ -46,7 +47,7 @@ typedef struct tagZEvent
 
 static uint32_t s_evttag=ZCRT_MAKE_FOURCC('Z','E','V','T');
 
-static _lpzstEventCB _zcrt_Event_malloc_cb( _lpzstEvent mng, uint8_t priority, ZCRT_EVT_CB fn, void* p1, void* p2 )
+static _lpzstEventCB _zcrt_Event_malloc_cb( _lpzstEvent mng, uint8_t priority, EZCRTEvtType evtType, ZCRT_EVT_CB fn, void* p1, void* p2 )
 {
 	_lpzstEventCB job = NULL;
 
@@ -72,6 +73,7 @@ static _lpzstEventCB _zcrt_Event_malloc_cb( _lpzstEvent mng, uint8_t priority, Z
 	job->p1 = p1;
 	job->p2 = p2;
 	job->pri = priority;
+	job->evtType = evtType;
 	return job;
 }
 
@@ -116,7 +118,11 @@ void zcrt_event_manage_delete(ZHANDLE_t h)
 	zcrt_mutex_delete(mng->mutex);
 	for (i=0; i<ZCRT_MAX_EVT; i++)
 	{
-		ZCRT_ASSERT(mng->evtlist[i]==NULL);
+		if (mng->evtlist[i]!=NULL)
+		{
+			ZLOG_ERROR("[ZCRT] eventid=%d is not unregister\n", i);
+			//ZCRT_ASSERT(mng->evtlist[i]==NULL);
+		}
 		_zcrt_e_free_cbs(mng->evtlist[i]);
 	}
 	_zcrt_e_free_cbs(mng->freelist);
@@ -126,6 +132,11 @@ void zcrt_event_manage_delete(ZHANDLE_t h)
 }
 
 EZCRTErr zcrt_event_register( ZModule_t module, uint8_t priority, uint32_t evtid, ZCRT_EVT_CB cb, void* p1, void* p2 )
+{
+	return zcrt_event_register_ex(module, priority, evtid, EZCRTEvtType_all, cb, p1, p2);
+}
+
+EZCRTErr zcrt_event_register_ex( ZModule_t module, uint8_t priority, uint32_t evtid, EZCRTEvtType evtType, ZCRT_EVT_CB cb, void* p1, void* p2 )
 {
 	_lpzstEvent mng = NULL;
 	_lpzstEventCB job = NULL;
@@ -140,7 +151,7 @@ EZCRTErr zcrt_event_register( ZModule_t module, uint8_t priority, uint32_t evtid
 		return EZCRTErr_paramErr;
 	}
 	mng = module->evt_mng;
-	job = _zcrt_Event_malloc_cb(mng, priority, cb, p1, p2);
+	job = _zcrt_Event_malloc_cb(mng, priority, evtType, cb, p1, p2);
 
 	zcrt_mutex_lock(mng->mutex);
 	if (mng->evtlist[evtid] == NULL)
@@ -186,7 +197,7 @@ void zcrt_event_unregister( ZModule_t module, uint32_t evtid, ZCRT_EVT_CB cb, vo
 	{
 		_lpzstEventCB cur=mng->evtlist[evtid];
 		_lpzstEventCB prev=NULL;
-		while (cur && cur->fn !=cb && cur->p1!=p1 && cur->p2!=p2)
+		while ( (cur!=NULL) && (cur->fn !=cb || cur->p1!=p1 || cur->p2!=p2) )
 		{
 			prev = cur;
 			cur = cur->next;
@@ -195,7 +206,7 @@ void zcrt_event_unregister( ZModule_t module, uint32_t evtid, ZCRT_EVT_CB cb, vo
 		{
 			if (cur != mng->evtlist[evtid])
 			{
-				prev = cur->next;
+				prev->next = cur->next;
 			}
 			else
 			{
@@ -207,6 +218,11 @@ void zcrt_event_unregister( ZModule_t module, uint32_t evtid, ZCRT_EVT_CB cb, vo
 	zcrt_mutex_unlock(mng->mutex);
 }
 void zcrt_event_send( ZModule_t module, uint32_t evtid, void* evtdata )
+{
+	zcrt_event_send_ex(module, evtid, EZCRTEvtType_all, evtdata);
+}
+
+void zcrt_event_send_ex( ZModule_t module, uint32_t evtid, EZCRTEvtType evtType, void* evtdata )
 {
 	_lpzstEvent mng = NULL;
 	if (module==NULL || module->evt_mng==NULL || evtid >= ZCRT_MAX_EVT)
@@ -222,7 +238,10 @@ void zcrt_event_send( ZModule_t module, uint32_t evtid, void* evtdata )
 		_lpzstEventCB cur=mng->evtlist[evtid];
 		while (cur)
 		{
-			cur->fn(evtid, evtdata, cur->p1, cur->p2);
+			if (cur->evtType==evtType || cur->evtType==EZCRTEvtType_all || evtType==EZCRTEvtType_all)
+			{
+				cur->fn(evtid, evtdata, cur->p1, cur->p2);
+			}
 			cur = cur->next;
 		}
 	}

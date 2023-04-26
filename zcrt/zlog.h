@@ -34,7 +34,7 @@ extern "C"{
 /** log 级别 */
 typedef enum
 {
-	ZELogLvl_FATAL,
+	ZELogLvl_FATAL=0,
 	ZELogLvl_ALERT,
 	ZELogLvl_CRITICAL,
 	ZELogLvl_ERROR,
@@ -68,7 +68,7 @@ void zcrt_logger_str(const ZLOGPID_t pid, int lvl,const char*);
 * 记录DEBUG级别log
 */
 #define ZLOG_DEBUG(...) zcrt_logger(0,ZELogLvl_DEBUG,__VA_ARGS__)
-#define ZLOG_INFO(...) zcrt_logger(0,ZELogLvl_DEBUG,__VA_ARGS__)
+#define ZLOG_INFO(...) zcrt_logger(0,ZELogLvl_INFO,__VA_ARGS__)
 #define ZLOG_WARN(...) zcrt_logger(0,ZELogLvl_WARNING,__VA_ARGS__)
 #define ZLOG_ERROR(...) zcrt_logger(0,ZELogLvl_ERROR,__VA_ARGS__)
 #define ZLOG_CRITICAL(...) zcrt_logger(0,ZELogLvl_CRITICAL,__VA_ARGS__)

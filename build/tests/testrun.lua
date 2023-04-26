@@ -45,6 +45,7 @@ if OS=='WIN32' then
 	package.cpath=[[.\?.dll;.\?51.dll;C:\Program Files\Lua\5.1\?.dll;C:\Program Files\Lua\5.1\?51.dll;C:\Program Files\Lua\5.1\clibs\?.dll;C:\Program Files\Lua\5.1\clibs\?51.dll;C:\Program Files\Lua\5.1\loadall.dll;C:\Program Files\Lua\5.1\clibs\loadall.dll]]
 	package.cpath=package.cpath..[[;C:\Program Files (x86)\Lua\5.1\?.dll;C:\Program Files (x86)\Lua\5.1\?51.dll;C:\Program Files (x86)\Lua\5.1\clibs\?.dll;C:\Program Files (x86)\Lua\5.1\clibs\?51.dll;C:\Program Files (x86)\Lua\5.1\loadall.dll;C:\Program Files (x86)\Lua\5.1\clibs\loadall.dll]]
 	package.cpath=APP_DIR..'../build/win32_lib/?.dll;'..package.cpath
+	package.path=APP_DIR..'../build/win32_lib/?.luac;'..package.path
 elseif OS=='MAC64' then
 	package.cpath=ZDC_DIR..'lib/mac64/?.so;'..package.cpath
 elseif OS=='LINUX' then
@@ -55,12 +56,12 @@ else
 end
 local mdbcmd=""
 
-local zloader=require'zloader'
-local mdb,err=zloader.getmod(APP_DIR.."zos.mdb","zloader.decode_default","ro=true")
+local zloader=require'zmdbloader'
+local mdb,err=zloader.getmod({APP_DIR.."zos.mdb",decode=zloader.decode_decompress_default,ro=true})
 if mdb then
 	mdbcmd=[[
-		local zloader=require'zloader'
-		local mdb1,err=zloader.getmod(APP_DIR.."zos.mdb","zloader.decode_default","ro=true")
+		local zloader=require'zmdbloader'
+		local mdb1,err=zloader.getmod({APP_DIR.."zos.mdb",decode=zloader.decode_decompress_default,ro=true})
 	]]
 end
 
@@ -71,18 +72,21 @@ require 'rings'
 local excludeDir='common,.svn,.tmp_versions,'
 local sucCnt = 0
 local errCnt = 0
+local testerrlist={}
+local testerrinfolist={}
 local onlyShow=false
-function SetRingEnv(S)
-	if IPC_ADDR then
-		S:dostring('IPC_ADDR=[['..IPC_ADDR..']]')
+local _test_config_key={'NE_ADDR', 'NE_PORT','IPC_ADDR','IPC_PORT'}
+function set_test_config(S)
+	for _,k	in ipairs(_test_config_key) do
+		local v=_G[k]
+		if v then
+			if type(v)=='string' then
+				S:dostring(string.format("%s='%s'",k,v))
+			else
+				S:dostring(k..'='..v)
+			end
+		end
 	end
-	if IPC_PORT then
-		S:dostring('IPC_ADDR='..IPC_PORT)
-	end
-	if USE_NETLINK then
-		S:dostring('USE_NETLINK=true')
-	end
-
 end
 
 function docase(file, func)
@@ -104,9 +108,8 @@ function docase(file, func)
 	return true
 	]]
 	local cmd=string.format(cmdf, package.path..';./?.lua',package.cpath, APP_DIR, mdbcmd, file, func)
-	local env={TESTAA='TEST'}
 	local S = rings.new (_G)
-	SetRingEnv(S)
+	set_test_config(S)
 	local r,r1=S:dostring(cmd)
 	if not r then
 		S:dostring(cmddestr)
@@ -128,6 +131,8 @@ function testsurecase(name, case)
 		print('SUCCESS: '..case)
 	else
 		errCnt = errCnt +1
+		table.insert(testerrlist, name..'/'..case)
+		table.insert(testerrinfolist, name..'/'..case..'\r'..err)
 		print('ERROR: '..case)
 		print(err)
 	end
@@ -153,9 +158,9 @@ function testfile(filename)
 
 	local tmod=require(name)
 
-	--所有case名称必须以test开始.
+	--所有case名称必须以test或_M.test开始.
 	--读取文件，是为了保证测试用例执行的顺序
-	for k in string.gmatch(ct, 'function% +(test[%w_]+)') do
+	for k in string.gmatch(ct, 'function% +%_+%M+%.+(test[%w_]+)') do
 		if tmod[k] then
 			testsurecase(name, k)
 		end
@@ -197,8 +202,21 @@ function show_statics()
 	print('=======================================')
 	print('           statics')
 	print('---------------------------------------')
+	if #testerrlist~=0 then
+		print('failure detail list:')
+		for k,v in pairs(testerrinfolist) do
+			print(v)
+		end
+
+		print('---------------------------------------')
+		print('failure list:')
+		for k,v in pairs(testerrlist) do
+			print('     '..v)
+		end
+	end
+	print('---------------------------------------')
 	print(''..sucCnt..' testcases is success')
-	print(''..errCnt..' testcases is error')
+	print(''..errCnt..' testcases is failure')
 end
 
 local function pathsplit(s, delim)

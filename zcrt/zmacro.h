@@ -73,4 +73,10 @@ if(!(expr)) {\
 
 /** 回调函数支持的最大参数个数*/
 #define ZCRT_CB_MAX_ARGS 6
+
+#define ZTIMER_INVALID_CONTAINER 0
+
+/* 永远有效的timer container id */
+#define ZTIMER_CONTAINER_CONSTID 0xfff
+
 #endif

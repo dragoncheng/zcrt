@@ -36,6 +36,20 @@ extern "C" {
 #endif
 
 /**
+* 分配一个定时器容器
+*  @param module zcrt module
+*  @return contianer id/ZTIMER_INVALID_CONTAINER
+*/
+uint16_t zcrt_timer_container_new( ZModule_t module);
+
+/**
+* 释放一个定时器容器
+*  @param module zcrt module
+*  @param contianer_id contianer id
+*/
+void zcrt_timer_container_delete( ZModule_t module, uint16_t container_id);
+
+/**
 * 添加一个定时器
 *  @param module zcrt module
 *  @param period 定时器周期，单位:毫秒
@@ -45,7 +59,7 @@ extern "C" {
 *  @return 0/error code
 *  @note 定时器回调函数线程与平台主线程不是同一个线程，故在回调函数中必须立即抛出job，而不是在回调函数中处理逻辑
 */
-EZCRTErr zcrt_timer_add(ZModule_t module, uint32_t period, ZCRT_CB cb, void* p1, void* p2 );
+EZCRTErr zcrt_timercon_add(ZModule_t module, uint16_t container_id, uint32_t period, ZCRT_CB cb, void* p1, void* p2 );
 
 /**
 * 添加一个定时器,传入参数为变长参数
@@ -58,7 +72,35 @@ EZCRTErr zcrt_timer_add(ZModule_t module, uint32_t period, ZCRT_CB cb, void* p1,
 *  @note 只支持一次性定时器，如果需要再次调用，请再次调用本接口
 *  @note 如果需要删除，zcrt_timer_delete接口的p1,p2参数用arg1,arg2代替
 */
-EZCRTErr zcrt_timer_add_argn(ZModule_t module, uint32_t period, ZCRT_CB cb, uint32_t argn, ...);
+EZCRTErr zcrt_timercon_add_argn(ZModule_t module, uint16_t container_id, uint32_t period, ZCRT_CB cb, uint32_t argn, ...);
+
+/**
+* 添加一个定时器
+*  @param module zcrt module
+*  @param contianer_id 定时器容器，支持ZTIMER_CONTAINER_CONSTID
+*  @param period 定时器周期，单位:毫秒
+*  @param cb callback
+*  @param p1 arg1
+*  @param p2 arg2
+*  @return 0/error code
+*  @note 定时器回调函数线程与平台主线程不是同一个线程，故在回调函数中必须立即抛出job，而不是在回调函数中处理逻辑
+*/
+//EZCRTErr zcrt_timer_add(ZModule_t module, uint16_t container_id, uint32_t period, ZCRT_CB cb, void* p1, void* p2 );
+#define zcrt_timer_add(module, period, cb, p1, p2) zcrt_timercon_add(module, ZTIMER_CONTAINER_CONSTID, period, cb, p1, p2)
+/**
+* 添加一个定时器,传入参数为变长参数
+*  @param module zcrt module
+*  @param contianer_id 定时器容器，支持ZTIMER_CONTAINER_CONSTID
+*  @param period 定时器周期，单位:毫秒
+*  @param cb callback
+*  @param argn 参数个数,必须大于0
+*  @param ... 参数
+*  @return 0/error code
+*  @note 只支持一次性定时器，如果需要再次调用，请再次调用本接口
+*  @note 如果需要删除，zcrt_timer_delete接口的p1,p2参数用arg1,arg2代替
+*/
+//EZCRTErr zcrt_timer_add_argn(ZModule_t module, uint16_t container_id, uint32_t period, ZCRT_CB cb, uint32_t argn, ...);
+#define zcrt_timer_add_argn(module, period, cb, argn, ...) zcrt_timercon_add_argn(module, ZTIMER_CONTAINER_CONSTID, period, cb, argn, ...)
 
 /**
 * 添加一个定时器,传入参数为变长参数

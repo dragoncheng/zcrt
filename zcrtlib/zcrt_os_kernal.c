@@ -34,7 +34,7 @@ THE SOFTWARE.
 #include <linux/delay.h>
 #include <linux/semaphore.h>
 #include <linux/sched.h>
-#include <asm/system.h>
+//#include <asm/system.h>
 
 #include "zcrt/ztype.h"
 #include "zcrt/zcrt_os.h"

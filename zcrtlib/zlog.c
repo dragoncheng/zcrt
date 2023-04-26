@@ -29,10 +29,43 @@ THE SOFTWARE.
 #ifndef __KERNEL__
 #include <stdarg.h>
 #include <stdio.h>
+#include <time.h> 
+static char* s_lvlname[ZELogLvl_TOP+1]=
+{
+	"FATAL",
+	"ALERT",
+	"CRITICAL",
+	"ERROR",
+	"WARNING",
+	"NOTICE",
+	"INFO",
+	"DEBUG",
+	"TOP"
+};
+
 void zcrt_logger( const ZLOGPID_t pid, int lvl,const char* fmt,... )
 {
 	va_list ap;
-	printf("LOGGER:[%d] %d ", lvl, (int)pid);
+	time_t timep;
+	struct tm p;
+	time(&timep);
+#ifdef WIN32
+	localtime_s(&p, &timep);
+#else
+	localtime_r(&timep, &p);
+#endif
+	if (lvl>=0 && lvl<=ZELogLvl_TOP)
+	{
+		printf("%04d-%02d-%02d %02d:%02d:%02d  ZCRT:[%s] %d ",(1900+p.tm_year),(1+p.tm_mon), p.tm_mday
+				,p.tm_hour, p.tm_min, p.tm_sec
+				,s_lvlname[lvl], (int)pid);
+	}
+	else
+	{
+		printf("%04d-%02d-%02d %02d:%02d:%02d  ZCRT:[%d] %d ",(1900+p.tm_year),(1+p.tm_mon), p.tm_mday
+			,p.tm_hour, p.tm_min, p.tm_sec
+			,lvl, (int)pid);
+	}
 
 	va_start(ap, fmt);
 	vprintf(fmt, ap);
@@ -42,8 +75,26 @@ void zcrt_logger( const ZLOGPID_t pid, int lvl,const char* fmt,... )
 
 void zcrt_logger_str( const ZLOGPID_t pid, int lvl,const char* info)
 {
-	ARG_UNUSED(lvl);
-	printf("LOGGER:[%d] %d %s\n", lvl, (int)pid, info);
+	time_t timep;
+	struct tm p;
+	time(&timep);
+#ifdef WIN32
+	localtime_s(&p, &timep);
+#else
+	localtime_r(&timep, &p);
+#endif
+	if (lvl>=0 && lvl<=ZELogLvl_TOP)
+	{
+		printf("%04d-%02d-%02d %02d:%02d:%02d  ZCRT:[%s] %d %s\n",(1900+p.tm_year),(1+p.tm_mon), p.tm_mday
+			,p.tm_hour, p.tm_min, p.tm_sec
+			,s_lvlname[lvl], (int)pid, info);
+	}
+	else
+	{
+		printf("%04d-%02d-%02d %02d:%02d:%02d  ZCRT:[%d] %d %s\n",(1900+p.tm_year),(1+p.tm_mon), p.tm_mday
+			,p.tm_hour, p.tm_min, p.tm_sec
+			,lvl, (int)pid, info);
+	}
 }
 #else
 void zcrt_logger( const ZLOGPID_t pid, int lvl,const char* fmt,... )

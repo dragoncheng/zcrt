@@ -36,8 +36,20 @@ ZHANDLE_t zcrt_schedule_module_init(void);
 void zcrt_schedule_module_delete(ZModule_t);
 
 static uint32_t s_tag=ZCRT_MAKE_FOURCC('Z','M','O','D');
+static ZModule_t s_global_module=NULL;
+
 extern uint32_t g_zcrt_starttime;
 extern uint32_t g_zcrt_start_cpu_clock;
+
+void zcrt_set_global_module(ZModule_t m)
+{
+	s_global_module = m;
+}
+
+ZModule_t zcrt_get_global_module( void )
+{
+	return s_global_module;
+}
 
 ZModule_t zcrt_module_new(uint16_t port)
 {

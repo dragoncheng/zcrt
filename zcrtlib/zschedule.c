@@ -73,10 +73,16 @@ typedef struct tagZSchThr
 	_lpzstScheduleJob freejobs;
 
 	bool_t run;
+	int32_t refCnt;		/* 创建schedule的引用个数 */
 	ZModule_t module;
 	
 	_lpzstSchedule sch_list;
 	struct tagZSchThr* next;
+
+	/* debugs */
+	uint32_t  joballoced;
+	uint32_t  jobfreed;
+	uint32_t  jobadded;
 }_zstSchThr,*_lpzstSchThr;
 
 static uint32_t s_schtag=ZCRT_MAKE_FOURCC('Z','S','C','H');
@@ -125,8 +131,10 @@ static _lpzstScheduleJob _zcrt_s_thr_getjob(_lpzstSchPriList schpri)
 static _lpzstScheduleJob _zcrt_s_job_new( _lpzstSchThr thr, ZCRT_CB cb )
 {
 	_lpzstScheduleJob job = NULL;
+	ZCRT_ASSERT(thr != NULL );
 
 	zcrt_mutex_lock(thr->mutex);
+	thr->jobadded++;
 	if (thr->freejobs)
 	{
 		job=thr->freejobs;
@@ -135,6 +143,7 @@ static _lpzstScheduleJob _zcrt_s_job_new( _lpzstSchThr thr, ZCRT_CB cb )
 	}
 	else
 	{
+		thr->joballoced++;
 		zcrt_mutex_unlock(thr->mutex);
 		job=zcrt_malloc(sizeof(_zstScheduleJob), s_schtag);
 		if (job==NULL)
@@ -147,15 +156,20 @@ static _lpzstScheduleJob _zcrt_s_job_new( _lpzstSchThr thr, ZCRT_CB cb )
 	return job;
 }
 
-static void _zcrt_s_job_delete( _lpzstSchThr thr, _lpzstScheduleJob job)
+static void _zcrt_s_job_delete_has_mutex( _lpzstSchThr thr, _lpzstScheduleJob job)
 {
 	_lpzstSchedule sch=job->sch;
-	zcrt_mutex_lock(thr->mutex);
+	/*zcrt_mutex_lock(thr->mutex);*/
 	job->next = thr->freejobs;
 	thr->freejobs = job;
+	thr->jobfreed++;
 	job->fn=NULL;
-	sch->cursize--;
-	zcrt_mutex_unlock(thr->mutex);
+	job->sch=NULL;
+	if (sch != NULL)
+	{
+		sch->cursize--;
+	}
+	/*zcrt_mutex_unlock(thr->mutex);*/
 }
 
 static void _zcrt_s_thr_delete( _lpzstSchThr thr )
@@ -186,6 +200,8 @@ static int _zcrt_schedule_thread_proc(void* arg)
 	_lpzstSchThr thr=(_lpzstSchThr)arg;
 	_lpzstScheduleJob job=NULL;
 	uint32_t i=0;
+	ZCRT_CB fn=NULL;
+	void* args[ZCRT_CB_MAX_ARGS];
 
 	while (thr->run && !zcrt_thread_should_stop(thr->thr))
 	{
@@ -193,6 +209,7 @@ static int _zcrt_schedule_thread_proc(void* arg)
 		do
 		{
 			job=NULL;
+			fn = NULL;
 			zcrt_mutex_lock(thr->mutex);
 			for (i=0; i<EZCRTSchPri_num; i++)
 			{
@@ -201,13 +218,17 @@ static int _zcrt_schedule_thread_proc(void* arg)
 					break;
 				}
 			}
-			zcrt_mutex_unlock(thr->mutex);
 			if (job)
 			{
-				ZCRT_ASSERT(job->fn);
-				/*zcrt_cmm_call_cb(job->fn, job->argn, job->args);*/
-				job->fn(job->args[0],job->args[1],job->args[2],job->args[3],job->args[4],job->args[5]);
-				_zcrt_s_job_delete(thr, job);
+				fn=job->fn;
+				memcpy(args, job->args, sizeof(void*)*ZCRT_CB_MAX_ARGS);
+				_zcrt_s_job_delete_has_mutex(thr, job);
+			}
+			zcrt_mutex_unlock(thr->mutex);
+
+			if (job && fn)
+			{
+				fn(args[0],args[1],args[2],args[3],args[4],args[5]);
 			}
 		}while(job!=NULL);
 	}
@@ -256,7 +277,41 @@ static void _zcrt_s_thr_add_sch(_lpzstSchThr thr, _lpzstSchedule sch)
 static void _zcrt_s_thr_remove_sch(_lpzstSchThr thr, _lpzstSchedule sch)
 {
 	zcrt_mutex_lock(thr->mutex);
-	ZCRT_ASSERT(sch->cursize == 0);
+	/*ZCRT_ASSERT(sch->cursize == 0);*/
+	if (sch->cursize > 0)
+	{	/* 删除该队列中存在的job */
+		_lpzstSchPriList schpri= &(thr->que[sch->pri]);
+		_lpzstScheduleJob job  = schpri->jobs;
+		_lpzstScheduleJob next = NULL;
+		_lpzstScheduleJob prev = job;
+		while (job!=NULL && sch->cursize!=0)
+		{
+			next = job->next;
+			if (job->sch==sch)
+			{
+				_zcrt_s_job_delete_has_mutex(thr, job);
+				if (prev == job)
+				{
+					schpri->jobs = next;
+					prev = next;
+				}
+				else
+				{
+					prev->next = next;
+				}
+				if(schpri->tail == job)
+				{
+					schpri->tail = NULL;
+				}
+			}
+			else
+			{
+				prev = job;
+			}
+			job = next;
+		}
+	}
+
 	if (thr->sch_list == sch)
 	{
 		thr->sch_list = sch->next;
@@ -328,15 +383,49 @@ ZHANDLE_t zcrt_schedule_create( ZModule_t module, const char* name, EZCRTSchType
 	sch->pri = pri;
 	sch->type = type;
 	sch->module = module;
+	zcrt_atom_inc(&(sch->thr->refCnt));
 
 	_zcrt_s_thr_add_sch(sch->thr, sch);
 
 	return sch;
 }
 
+ZHANDLE_t zcrt_schedule_create_share(ZModule_t module, ZHANDLE_t sch1, const char* name, EZCRTPriority pri, uint16_t maxsize)
+{
+	_lpzstSchedule sch = zcrt_malloc(sizeof(_zstSchedule), s_schtag);
+	_lpzstSchedule shareSch = (_lpzstSchedule)sch1; 
+	if (sch==NULL || sch1==NULL)
+	{
+		return NULL;
+	}
+	memset(sch,0,sizeof(_zstSchedule));
+	memcpy(sch->name, name, strlen(name)>=SCH_NAME_LEN?SCH_NAME_LEN-1:strlen(name));
+
+	if (shareSch->type==EZCRTSchType_selfThread)
+	{
+		sch->type = EZCRTSchType_shareThread;
+		sch->thr = shareSch->thr;
+	}
+	else
+	{
+		sch->thr = (_lpzstSchThr)module->zcrtthr;
+	}
+	zcrt_atom_inc(&(sch->thr->refCnt));
+
+	sch->maxsize = maxsize;
+	sch->pri = pri;
+	sch->module = module;
+
+	_zcrt_s_thr_add_sch(sch->thr, sch);
+
+	return sch;
+
+}
+
 void zcrt_schedule_delete( ZHANDLE_t h )
 {
 	_lpzstSchedule sch=(_lpzstSchedule)h;
+	uint32_t cnt=0;
 	if (h==NULL) return;
 	if (sch->pri >= EZCRTSchPri_num)
 	{
@@ -344,13 +433,14 @@ void zcrt_schedule_delete( ZHANDLE_t h )
 		return;
 	}
 	_zcrt_s_thr_remove_sch(sch->thr, sch);
-	if (sch->type == EZCRTSchType_selfThread)
+	cnt=zcrt_atom_dec(&(sch->thr->refCnt));
+	if (sch->type == EZCRTSchType_selfThread && cnt==0)
 	{
 		sch->thr->run = false;
 	}
+	sch->thr = NULL;
 	zcrt_free(sch);
 }
-
 
 EZCRTErr zcrt_schedule_sendjob( ZHANDLE_t h, ZCRT_CB cb, void* p1, void* p2 )
 {
@@ -359,6 +449,11 @@ EZCRTErr zcrt_schedule_sendjob( ZHANDLE_t h, ZCRT_CB cb, void* p1, void* p2 )
 
 	if (sch==NULL || cb==NULL ||sch->pri>=EZCRTSchPri_num) { return EZCRTErr_paramErr; }
 	if (sch->cursize >= sch->maxsize) { return EZCRTErr_full; }
+	ZCRT_ASSERT(sch->thr != NULL );
+	if (sch->thr == NULL)
+	{
+		return EZCRTErr_paramErr;
+	}
 
 	job = _zcrt_s_job_new(sch->thr,cb);
 	if (job==NULL)
@@ -419,5 +514,6 @@ void zcrt_schedule_module_delete(ZModule_t m)
 	{
 		thr->run = false;
 		zcrt_sem_give(thr->sem);
+		thr = thr->next;
 	}
 }

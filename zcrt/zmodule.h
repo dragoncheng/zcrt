@@ -56,4 +56,9 @@ void zcrt_module_lock(ZModule_t m);
 */
 void zcrt_module_unlock(ZModule_t m);
 
+
+void zcrt_set_global_module(ZModule_t m);
+
+ZModule_t zcrt_get_global_module( void );
+
 #endif

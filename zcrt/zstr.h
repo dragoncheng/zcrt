@@ -40,6 +40,7 @@ int32_t zstr_cmp(zstr_t* s1, zstr_t* s2);
 int32_t zstr_buf_cmp(zstr_t* s1, const char* buf);
 
 void zstr_new(zstr_t* s1, const char* buf);
+void zstr_new_len(zstr_t* s1, const char* buf, uint32_t len);
 void zstr_delete(zstr_t* s1);
 
 #endif

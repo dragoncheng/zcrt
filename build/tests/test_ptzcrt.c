@@ -5,7 +5,7 @@
 #include <winsock2.h>
 #include "windows.h"
 #include <shellapi.h>
-#include <vld.h>
+//#include <vld.h>
 #else
 #ifndef __KERNEL__
 #include<signal.h> 

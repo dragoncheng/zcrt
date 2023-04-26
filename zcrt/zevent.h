@@ -33,6 +33,14 @@ THE SOFTWARE.
 extern "C" {
 #endif
 
+/** 事件类型  */
+typedef enum
+{
+	EZCRTEvtType_all,		/**< all */
+	EZCRTEvtType_local,		/**< 本地事件 */
+	EZCRTEvtType_remote,	/**< 远端事件 */
+}EZCRTEvtType;
+
 /**
 * 事件回调函数
 *  @param evtid 事件ID，目前只支持<256
@@ -43,7 +51,7 @@ extern "C" {
 typedef void(*ZCRT_EVT_CB)(uint32_t evtid, void* evtdata, void* p1, void* p2);
 
 /**
-* 关注事件
+* 关注事件（默认关注所有事件）
 *  @param module zcrt module
 *  @param priority 优先级，数字越高，优先级越高
 *  @param evtid 事件ID，目前只支持<256
@@ -53,6 +61,19 @@ typedef void(*ZCRT_EVT_CB)(uint32_t evtid, void* evtdata, void* p1, void* p2);
 *  @return 0/error code
 */
 EZCRTErr zcrt_event_register( ZModule_t module, uint8_t priority, uint32_t evtid, ZCRT_EVT_CB cb, void* p1, void* p2 );
+
+/**
+* 关注事件
+*  @param module zcrt module
+*  @param priority 优先级，数字越高，优先级越高
+*  @param evtid 事件ID，目前只支持<256
+*  @param evtType EZCRTEvtType_all:关注所有事件  local: 只关注本地时间  remote: 只关注远端事件
+*  @param cb callback
+*  @param p1 arg1
+*  @param p2 arg2
+*  @return 0/error code
+*/
+EZCRTErr zcrt_event_register_ex( ZModule_t module, uint8_t priority, uint32_t evtid, EZCRTEvtType evtType, ZCRT_EVT_CB cb, void* p1, void* p2 );
 
 /**
 * 取消事件关注
@@ -66,12 +87,21 @@ EZCRTErr zcrt_event_register( ZModule_t module, uint8_t priority, uint32_t evtid
 void zcrt_event_unregister( ZModule_t module, uint32_t evtid, ZCRT_EVT_CB cb, void* p1, void* p2 );
 
 /**
-* 发送事件
+* 发送事件（默认发送的是all事件类型）
 *  @param module zcrt module
 *  @param evtid 事件ID，目前只支持<256
 *  @param evtdata 事件信息
 */
 void zcrt_event_send( ZModule_t module, uint32_t evtid, void* evtdata );
+
+/**
+* 发送事件
+*  @param module zcrt module
+*  @param evtid 事件ID，目前只支持<256
+*  @param evtType EZCRTEvtType_all:所有事件  local:发送的是本地事件 remote: 关注的是远端事件
+*  @param evtdata 事件信息
+*/
+void zcrt_event_send_ex( ZModule_t module, uint32_t evtid, EZCRTEvtType evtType, void* evtdata );
 
 #ifdef __cplusplus
 };

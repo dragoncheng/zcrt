@@ -37,8 +37,9 @@ extern "C" {
 /** 调度队列类型  */
 typedef enum
 {
-	EZCRTSchType_zcrtThread,		/**<  公用zcrt的thread */
+	EZCRTSchType_zcrtThread,	/**<  公用zcrt的thread */
 	EZCRTSchType_selfThread,	/**<  私有thread */
+	EZCRTSchType_shareThread,	/**<  共享thread,内部使用 */
 }EZCRTSchType;
 
 /** 调度队列优先级  */
@@ -60,9 +61,24 @@ typedef enum
 *  @return 调度队列句柄
 */
 ZHANDLE_t zcrt_schedule_create(ZModule_t module, const char* name, EZCRTSchType type, EZCRTPriority pri, uint16_t maxsize);
+
+/**
+* 创建调度队列(与其他schedule共用一个thread)
+*  @param module crt module
+*  @param name name
+*  @param type 队列类型
+*  @param pri  队列优先级
+*  @param maxsize  调度队列最大job
+*  @return 调度队列句柄
+*/
+ZHANDLE_t zcrt_schedule_create_share(ZModule_t module, ZHANDLE_t shareSch, const char* name, EZCRTPriority pri, uint16_t maxsize);
+
 /**
 * 删除调度队列
 *  @param sch 调度队列句柄
+*  @note 目前删除队列时,如果改队列仍然有job需要执行,则是直接删除job,故有可能会造成资源泄露.
+*  @note 由于目前使用环境基本不会出现该问题,故暂时忽略
+*  @note 如果以后需要处理该问题，可以将删除sch的放到调度队列队尾执行
 */
 void zcrt_schedule_delete(ZHANDLE_t sch);
 

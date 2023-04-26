@@ -31,6 +31,7 @@ THE SOFTWARE.
 #include <linux/sched.h>
 #include <net/sock.h>
 #include <net/netlink.h>
+#include <linux/version.h>
 
 #include "zcrt/zcrt.h"
 #include "zipc/zipc_parse.h"
@@ -59,20 +60,26 @@ static bool_t _zipc_client_recv_hdr(char* data, int datalen, ZIPCMsgHdr_t hdr)
 	return datalen>=(hdr->payloadSize+ZIPC_HEAD_LEN);
 }
 
-static void _zipc_netlink_send(struct sock *nl_sk, ZBuf_t buf, u32 pid)
+static void _zipc_netlink_send(ZIPCModule_t ipc, ZBuf_t buf, u32 pid)
 {
+	struct sock *nl_sk = (struct sock *)ipc->socket;
 	struct sk_buff *skb = NULL;
 	struct nlmsghdr *nlh = NULL;
 	skb = nlmsg_new(buf->len+NLMSG_LENGTH(0), 0);
 	if (!skb){
 		printk(KERN_ERR "net_link: allocate failed.\n");
+		zipc_buf_free(ipc, buf);
 		return;
     }
 	ZCRT_ASSERT(buf->len<64000);	/*znetlink客户端接收的每个报文不能超过64k长度*/
 	nlh=nlmsg_put(skb,0,0,NLMSG_DONE,buf->len,0); 
+#if LINUX_VERSION_CODE< KERNEL_VERSION(3,1,0)
 	NETLINK_CB(skb).pid = 0; /* from kernel */
+#endif
 	memcpy(NLMSG_DATA(nlh), buf->buf, buf->len);
 	netlink_unicast(nl_sk, skb, pid, MSG_DONTWAIT);
+
+	zipc_buf_free(ipc, buf);
 }
 
 static void _zipc_hookevent_cb(uint32_t evtid, void* evtdata, ZIPCModule_t ipc, u32 pid)
@@ -85,9 +92,13 @@ static void _zipc_hookevent_cb(uint32_t evtid, void* evtdata, ZIPCModule_t ipc, 
 	}
 	if (zipc_encode_event(ipc->module, evtid, evtdata, buf)==0)
 	{
-		_zipc_netlink_send( (struct sock *)ipc->socket, buf, pid);
+		/* _zipc_netlink_send( (struct sock *)ipc->socket, buf, pid); */
+		if (zcrt_schedule_sendjob_argn(ipc->evtSch, (ZCRT_CB)_zipc_netlink_send, 3, ipc, buf, pid) !=0 )
+		{
+			zipc_buf_free(ipc, buf);
+			ZLOG_ERROR("zipc evtSch schedule was full:evtid=%d\n",evtid);
+		}
 	}
-	zipc_buf_free(ipc, buf);
 }
 
 static void _zipc_msg_proc_job(ZIPCModule_t ipc, ZBuf_t ibuf, uint16_t appType, u32 pid)
@@ -112,10 +123,15 @@ static void _zipc_msg_proc_job(ZIPCModule_t ipc, ZBuf_t ibuf, uint16_t appType, 
 	{
 		rhdr = (ZIPCMsgHdr_t)obuf->buf;
 		rhdr->payloadSize = htonl(obuf->len-ZIPC_HEAD_LEN);
-		_zipc_netlink_send( (struct sock *)ipc->socket, obuf, pid);
+		//_zipc_netlink_send( (struct sock *)ipc->socket, obuf, pid);
+		if( zcrt_schedule_sendjob_argn(ipc->respondSch, (ZCRT_CB)_zipc_netlink_send, 3, ipc, obuf, pid) !=0 )
+		{
+			zipc_buf_free(ipc, obuf);
+			ZLOG_ERROR("zipc respondSch schedule was full");
+		}
 	}
 	zipc_buf_free(ipc, ibuf);
-	zipc_buf_free(ipc, obuf);
+	/* zipc_buf_free(ipc, obuf); */
 }
 
 void nl_data_recv (struct sk_buff *__skb)
@@ -160,7 +176,11 @@ void nl_data_recv (struct sk_buff *__skb)
 	zcrt_buf_append(buf, data+ZIPC_HEAD_LEN, hdr.payloadSize);
 	appType = hdr.appType;
 
-	zcrt_schedule_sendjob_argn(s_kipc->sch, (ZCRT_CB)_zipc_msg_proc_job, 4, s_kipc, buf, (void*)appType, (void*)pid);
+	if (zcrt_schedule_sendjob_argn(s_kipc->sch, (ZCRT_CB)_zipc_msg_proc_job, 4, s_kipc, buf, (void*)appType, (void*)pid) !=0 )
+	{
+		zipc_buf_free(s_kipc, buf);
+		//ZLOG_ERROR("zipc sch schedule was full");
+	}
 
 	kfree_skb(skb);
 	return;
@@ -170,11 +190,7 @@ ZHANDLE_t zipc_server_create(ZModule_t module, uint16_t port, const char* name)
 {
 	struct sock * nl_sk = NULL; 
 	ZIPCModule_t ipc = NULL;
-	nl_sk = netlink_kernel_create(&init_net, NETLINK_ZCRT_IPC, 0, nl_data_recv, NULL, THIS_MODULE);
-	if (! nl_sk) {  
-		printk("Fail to create netlink socket.\n");  
-		return NULL;  
-	}
+
 	ipc = (ZIPCModule_t)zcrt_malloc(sizeof(ZIPCModule), s_tag);
 	s_kipc=ipc;
 
@@ -183,10 +199,27 @@ ZHANDLE_t zipc_server_create(ZModule_t module, uint16_t port, const char* name)
 
 	ipc->module = module;
 	ipc->port = port;
-	ipc->socket = (ZHANDLE_t)nl_sk;
+
 	ipc->mutex = zcrt_mutex_create("ZIPC");
 	ipc->modlist = zcrt_hash_new(128,zipc_component_hash_key, zipc_component_hash_cmp);
-	ipc->sch = zcrt_schedule_create(module, "zipc", EZCRTSchType_zcrtThread, EZCRTSchPri_priNormal, 20);
+	ipc->sch = zcrt_schedule_create(module, "zipc", EZCRTSchType_zcrtThread, EZCRTSchPri_priNormal, 100);
+	ipc->respondSch = zcrt_schedule_create(module, "zipc", EZCRTSchType_selfThread, EZCRTSchPri_priNormal, 500);
+	ipc->evtSch = zcrt_schedule_create_share(module, ipc->respondSch, "zipc", EZCRTSchPri_priLow, 1500);
+
+#if LINUX_VERSION_CODE< KERNEL_VERSION(3,1,0)
+	nl_sk = netlink_kernel_create(&init_net, NETLINK_ZCRT_IPC, 0, nl_data_recv, NULL, THIS_MODULE);
+#else
+	struct netlink_kernel_cfg cfg = {
+    		.input = nl_data_recv,
+	};
+	nl_sk = netlink_kernel_create(&init_net, NETLINK_ZCRT_IPC, &cfg);
+#endif
+	if (! nl_sk) {  
+		printk("Fail to create netlink socket.\n");  
+		return NULL;  
+	}
+
+	ipc->socket = (ZHANDLE_t)nl_sk;
 	ipc->run = true;
 	
 	return (ZHANDLE_t)ipc;
@@ -226,6 +259,8 @@ void zipc_server_delete( ZHANDLE_t h )
 
 	_zipc_comp_buf_freeall(ipc);
 	zcrt_hash_delete(ipc->modlist);
+	zcrt_schedule_delete(ipc->evtSch);
+	zcrt_schedule_delete(ipc->respondSch);
 	zcrt_schedule_delete(ipc->sch);
 	zcrt_mutex_delete(ipc->mutex);
 	zcrt_free(ipc);

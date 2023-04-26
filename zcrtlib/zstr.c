@@ -54,6 +54,14 @@ void zstr_new(zstr_t* s1, const char* buf)
 	memcpy(s1->ptr, buf, s1->len);
 }
 
+void zstr_new_len(zstr_t* s1, const char* buf, uint32_t len)
+{
+	s1->len = len;
+	s1->ptr = zcrt_malloc(s1->len +1, s_tag);
+	memset(s1->ptr, 0, s1->len+1);
+	memcpy(s1->ptr, buf, s1->len);
+}
+
 void zstr_delete( zstr_t* s1 )
 {
 	if (s1!=NULL && s1->ptr!=NULL)

@@ -49,6 +49,7 @@
 				UsePrecompiledHeader="0"
 				WarningLevel="4"
 				DebugInformationFormat="4"
+				DisableSpecificWarnings="4206"
 			/>
 			<Tool
 				Name="VCManagedResourceCompilerTool"
@@ -106,11 +107,13 @@
 				Name="VCCLCompilerTool"
 				Optimization="2"
 				EnableIntrinsicFunctions="true"
+				AdditionalIncludeDirectories="../../"
 				PreprocessorDefinitions="WIN32;NDEBUG;_LIB"
-				RuntimeLibrary="2"
+				RuntimeLibrary="0"
 				EnableFunctionLevelLinking="true"
 				UsePrecompiledHeader="0"
-				WarningLevel="3"
+				ProgramDataBaseFileName="$(TargetDir)$(TargetName).pdb"
+				WarningLevel="4"
 				DebugInformationFormat="3"
 			/>
 			<Tool
